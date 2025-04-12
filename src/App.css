@@ -1,0 +1,277 @@
+/* Estilos generales */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: #121212;
+  color: #f5f5f5;
+}
+
+/* Contenedor principal del juego */
+.plinko-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Encabezado del juego */
+.game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.game-header h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #53fc18;
+}
+
+/* Contenedor de autenticación */
+.auth-container {
+  display: flex;
+  align-items: center;
+}
+
+/* Información del usuario */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Botones */
+.kick-login-button, 
+.logout-button, 
+.drop-button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kick-login-button {
+  background-color: #53fc18;
+  color: #000;
+}
+
+.kick-login-button:hover {
+  background-color: #3edf00;
+}
+
+.logout-button {
+  background-color: #505050;
+  color: #ffffff;
+}
+
+.logout-button:hover {
+  background-color: #707070;
+}
+
+/* Tablero de juego */
+.game-board {
+  width: 600px;
+  height: 600px;
+  background-color: #0e1621;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(83, 252, 24, 0.2);
+  margin-bottom: 20px;
+}
+
+/* Controles del juego */
+.controls {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.drop-button {
+  background-color: #53fc18;
+  color: #000;
+  font-size: 16px;
+  padding: 10px 24px;
+}
+
+.drop-button:hover {
+  background-color: #3edf00;
+}
+
+.drop-button.disabled {
+  background-color: #505050;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Instrucciones */
+.instructions {
+  background-color: #1c1c1c;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 20px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.instructions h3 {
+  margin-top: 0;
+  color: #53fc18;
+}
+
+.instructions p {
+  line-height: 1.6;
+}
+
+/* Página de callback de autenticación */
+.auth-callback-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 20px;
+  text-align: center;
+}
+
+.auth-status {
+  margin: 20px 0;
+  padding: 15px;
+  background-color: #1c1c1c;
+  border-radius: 8px;
+  max-width: 400px;
+}
+
+/* Animación de carga */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(83, 252, 24, 0.3);
+  border-radius: 50%;
+  border-top-color: #53fc18;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Integración con Kick */
+.kick-integration {
+  width: 100%;
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.connection-panel,
+.users-panel,
+.chat-panel {
+  background-color: #1c1c1c;
+  padding: 15px;
+  border-radius: 8px;
+}
+
+.connection-panel h3,
+.users-panel h3,
+.chat-panel h3 {
+  margin-top: 0;
+  color: #53fc18;
+}
+
+.connect-form {
+  display: flex;
+  gap: 10px;
+}
+
+.connect-form input {
+  flex: 1;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #333;
+  background-color: #333;
+  color: #fff;
+}
+
+.connected-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.users-list,
+.messages-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin: 10px 0;
+  padding: 10px;
+  background-color: #252525;
+  border-radius: 4px;
+}
+
+.user-item,
+.message-item {
+  padding: 5px 0;
+  border-bottom: 1px solid #333;
+}
+
+.message-item strong {
+  color: #53fc18;
+}
+
+.process-button {
+  background-color: #53fc18;
+  color: #000;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.process-button:disabled {
+  background-color: #505050;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .plinko-container {
+    padding: 10px;
+  }
+  
+  .game-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .game-board {
+    width: 100%;
+    height: 500px;
+  }
+  
+  .instructions,
+  .kick-integration {
+    width: 100%;
+  }
+}
