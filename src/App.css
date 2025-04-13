@@ -396,3 +396,36 @@ body {
 .kick-login-button:hover {
   background-color: #4cdd00;
 }
+.user-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-info span {
+  margin-right: 10px;
+  color: white;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid #5eff00;
+  object-fit: cover;
+}
+
+.logout-button {
+  background-color: #333 !important;
+  color: white !important;
+  padding: 8px 12px !important;
+  border: none !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  margin-left: 10px !important;
+  transition: background-color 0.2s;
+}
+
+.logout-button:hover {
+  background-color: #444 !important;
+}

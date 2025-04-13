@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import GameControls from './components/GameControls';
 import usePlinkoGame from './components/PlinkoGame';
 import KickLoginButton from './components/KickLoginButton';
@@ -22,7 +22,19 @@ const PlinkoGame = () => {
       
       if (auth) {
         const userData = kickAuthService.getUser();
+        console.log('Datos del usuario:', userData); // Para depuración
         setUser(userData);
+        
+        // Si no hay datos de usuario, intentar obtenerlos
+        if (!userData) {
+          try {
+            const freshUserData = await kickAuthService.fetchUserInfo();
+            console.log('Nuevos datos de usuario:', freshUserData);
+            setUser(freshUserData);
+          } catch (error) {
+            console.error('Error al obtener datos del usuario:', error);
+          }
+        }
       }
     };
     
@@ -34,11 +46,19 @@ const PlinkoGame = () => {
     onBallChange: () => setBallCount(prev => prev + 1)
   });
 
-  // Cerrar sesión
-  const handleLogout = async () => {
-    await kickAuthService.revokeToken();
-    setIsAuthenticated(false);
-    setUser(null);
+  // Cerrar sesión (simplificado)
+  const handleLogout = () => {
+    console.log('Cerrando sesión...');
+    try {
+      // Primero intentamos revocar el token
+      kickAuthService.logout();
+      // Luego actualizamos el estado local
+      setIsAuthenticated(false);
+      setUser(null);
+      console.log('Sesión cerrada correctamente');
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
   };
 
   return (
@@ -50,15 +70,32 @@ const PlinkoGame = () => {
             <div className="user-info">
               {user && (
                 <>
-                  <span>¡Hola, {user.username}!</span>
+                  <span>¡Hola, {user.username || 'usuario'}!</span>
+                  {/* Prueba con diferentes propiedades de imagen posibles */}
                   <img 
-                    src={user.profile_picture || '/default-avatar.png'} 
+                    src={user.avatar_url || user.profile_image || user.profile_picture || 'https://via.placeholder.com/40'} 
                     alt="Avatar" 
                     className="user-avatar" 
+                    onError={(e) => {
+                      console.log('Error al cargar la imagen de perfil');
+                      e.target.src = 'https://via.placeholder.com/40';
+                    }}
                   />
                 </>
               )}
-              <button className="logout-button" onClick={handleLogout}>
+              <button 
+                className="logout-button" 
+                onClick={handleLogout}
+                style={{
+                  backgroundColor: '#333',
+                  color: 'white',
+                  padding: '8px 12px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  marginLeft: '10px'
+                }}
+              >
                 Cerrar sesión
               </button>
             </div>
