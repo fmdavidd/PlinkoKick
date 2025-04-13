@@ -8,7 +8,7 @@ class KickAuthService {
   constructor() {
     this.clientId = import.meta.env.VITE_KICK_CLIENT_ID || '';
     this.clientSecret = import.meta.env.VITE_KICK_CLIENT_SECRET || '';
-    this.redirectUri = import.meta.env.VITE_KICK_REDIRECT_URI || 'http://localhost:5173/auth/callback';
+    this.redirectUri = import.meta.env.VITE_KICK_REDIRECT_URI || 'https://plinko-kick.vercel.app/auth/callback';
     
     // Siguiendo exactamente la documentación 
     this.baseUrl = 'https://id.kick.com';
