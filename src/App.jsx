@@ -1,99 +1,117 @@
+// src/App.jsx
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
-import GameControls from './components/GameControls';
-import usePlinkoGame from './components/PlinkoGame';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import kickAuthService from './utils/KickAuthService';
 import KickLoginButton from './components/KickLoginButton';
 import AuthCallback from './pages/AuthCallback';
-import kickAuthService from './utils/KickAuthService';
-import './App.css';
+import Plinko from './pages/Plinko'; // Tu componente principal del juego
 
-// Página principal con el juego Plinko
-const PlinkoGame = () => {
-  // Referencias y estado del juego de Plinko
-  const [ballCount, setBallCount] = useState(0);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
+// Componente para el Avatar/Icono del usuario
+const UserAvatar = ({ user, onLogout }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
   
-  // Verificar autenticación al cargar
-  useEffect(() => {
-    const checkAuth = async () => {
-      const auth = kickAuthService.isAuthenticated();
-      setIsAuthenticated(auth);
-      
-      if (auth) {
-        const userData = kickAuthService.getUser();
-        setUser(userData);
-      }
-    };
-    
-    checkAuth();
-  }, []);
-  
-  // Inicializar el juego con un ref creado directamente
-  const { sceneRef, canDrop, dropBall } = usePlinkoGame({
-    onBallChange: () => setBallCount(prev => prev + 1)
-  });
-
-  // Cerrar sesión
-  const handleLogout = async () => {
-    await kickAuthService.revokeToken();
-    setIsAuthenticated(false);
-    setUser(null);
+  const toggleMenu = () => {
+    setMenuOpen(!menuOpen);
   };
-
+  
   return (
-    <div className="plinko-container">
-      <header className="game-header">
-        <h1>Plinko con Kick</h1>
-        <div className="auth-container">
-          {isAuthenticated ? (
-            <div className="user-info">
-              {user && (
-                <>
-                  <span>¡Hola, {user.username}!</span>
-                  <img 
-                    src={user.profile_picture || '/default-avatar.png'} 
-                    alt="Avatar" 
-                    className="user-avatar" 
-                  />
-                </>
-              )}
-              <button className="logout-button" onClick={handleLogout}>
-                Cerrar sesión
-              </button>
-            </div>
-          ) : (
-            <KickLoginButton />
-          )}
-        </div>
-      </header>
-      
-      <div className="game-board" ref={sceneRef}></div>
-      
-      <GameControls 
-        onDropBall={dropBall}
-        canDrop={canDrop}
-      />
-      
-      <div className="instructions">
-        <h3>Instrucciones</h3>
-        <p>
-          1. Inicia sesión con tu cuenta de Kick<br />
-          2. Pulsa "Drop Ball" para soltar una bola<br />
-          3. Los espectadores pueden escribir !unirme en el chat para participar
-        </p>
+    <div className="user-avatar-container">
+      <div className="user-avatar" onClick={toggleMenu}>
+        {user?.profile_image ? (
+          <img 
+            src={user.profile_image} 
+            alt={user.username} 
+            className="avatar-image" 
+          />
+        ) : (
+          <div className="avatar-placeholder">
+            {user?.username?.charAt(0)?.toUpperCase() || 'U'}
+          </div>
+        )}
       </div>
+      
+      {menuOpen && (
+        <div className="user-menu">
+          <div className="user-info">
+            <p className="username">{user?.username || 'Usuario'}</p>
+            <p className="email">{user?.email || ''}</p>
+          </div>
+          <button className="logout-button" onClick={onLogout}>
+            Cerrar sesión
+          </button>
+        </div>
+      )}
     </div>
   );
 };
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  // Verificar estado de autenticación al cargar
+  useEffect(() => {
+    const checkAuth = async () => {
+      const isAuth = kickAuthService.isAuthenticated();
+      setIsAuthenticated(isAuth);
+      
+      if (isAuth) {
+        const userData = kickAuthService.getUser();
+        setUser(userData);
+        
+        // Si no hay datos de usuario, intentar obtenerlos
+        if (!userData) {
+          const newUserData = await kickAuthService.fetchUserInfo();
+          setUser(newUserData);
+        }
+      }
+      
+      setLoading(false);
+    };
+    
+    checkAuth();
+  }, []);
+  
+  const handleLogout = () => {
+    kickAuthService.logout();
+    setIsAuthenticated(false);
+    setUser(null);
+    // Redirigir a la página principal
+    window.location.href = '/';
+  };
+  
+  if (loading) {
+    return <div className="loading">Cargando...</div>;
+  }
+  
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<PlinkoGame />} />
-        <Route path="/auth/callback" element={<AuthCallback />} />
-      </Routes>
+      <div className="app">
+        <header className="app-header">
+          <div className="logo">PlinkoKick</div>
+          <div className="auth-section">
+            {isAuthenticated ? (
+              <UserAvatar user={user} onLogout={handleLogout} />
+            ) : (
+              <KickLoginButton onLogin={() => {}} />
+            )}
+          </div>
+        </header>
+        
+        <main className="main-content">
+          <Routes>
+            {/* Ruta para la página principal - el juego Plinko */}
+            <Route path="/" element={<Plinko user={user} isAuthenticated={isAuthenticated} />} />
+            
+            {/* Ruta para el callback de autenticación */}
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            
+            {/* Redirigir cualquier otra ruta a la página principal */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
     </Router>
   );
 }
