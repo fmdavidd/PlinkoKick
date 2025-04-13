@@ -22,25 +22,27 @@ const PlinkoGame = () => {
       setIsAuthenticated(auth);
       
       if (auth) {
-        // Establecer nombre de usuario y obtener imagen de perfil si está disponible
-        setUsername('fmdavid');
+        // Establecer nombre de usuario
+        const savedUsername = kickAuthService.getUsername();
+        if (savedUsername) {
+          setUsername(savedUsername);
+        }
+        
+        // Obtener imagen de perfil si está disponible
         const savedProfileImage = kickAuthService.getProfileImage();
         if (savedProfileImage) {
           setProfileImage(savedProfileImage);
-        }
-        
-        // También intentar obtener información del canal para la foto de perfil
-        try {
-          const channelInfo = await kickAuthService.getChannelInfo();
-          console.log('Información del canal:', channelInfo);
-          
-          // Actualizar la imagen de perfil si se obtuvo
-          const newProfileImage = kickAuthService.getProfileImage();
-          if (newProfileImage) {
-            setProfileImage(newProfileImage);
+        } else {
+          // Si no hay imagen guardada, intentar obtenerla
+          try {
+            await kickAuthService.getUserInfo();
+            const newProfileImage = kickAuthService.getProfileImage();
+            if (newProfileImage) {
+              setProfileImage(newProfileImage);
+            }
+          } catch (error) {
+            console.error('Error al obtener información del usuario:', error);
           }
-        } catch (error) {
-          console.error('Error al obtener información del canal:', error);
         }
       }
     };

@@ -79,12 +79,11 @@ class KickAuthService {
       localStorage.setItem('kick_auth_state', state);
       
       // Construir URL para la autenticación OAuth
-      // En KickAuthService.js, método initiateAuthFlow
       const params = new URLSearchParams({
         client_id: this.clientId,
         redirect_uri: this.redirectUri,
         response_type: 'code',
-        scope: 'user:read channel:read chat:write chat:read',  // Añadir channel:read
+        scope: 'user:read channel:read chat:write chat:read',  // Incluyendo channel:read
         state: state,
         code_challenge: codeChallenge,
         code_challenge_method: 'S256'
@@ -173,29 +172,59 @@ class KickAuthService {
 
       console.log("Información del canal:", response.data);
 
-      if (response.data && response.data.length > 0) {
-        const channelInfo = response.data[0]; // Tomar el primer canal
-        
-        // Buscar la imagen de perfil en la respuesta
-        if (channelInfo.user && channelInfo.user.profile_pic) {
-          localStorage.setItem('kick_profile_image', channelInfo.user.profile_pic);
-          this.profileImage = channelInfo.user.profile_pic;
-        } else if (channelInfo.profile_pic) {
-          localStorage.setItem('kick_profile_image', channelInfo.profile_pic);
-          this.profileImage = channelInfo.profile_pic;
-        } else if (channelInfo.thumbnail && channelInfo.thumbnail.url) {
-          localStorage.setItem('kick_profile_image', channelInfo.thumbnail.url);
-          this.profileImage = channelInfo.thumbnail.url;
-        } else if (channelInfo.avatar) {
-          localStorage.setItem('kick_profile_image', channelInfo.avatar);
-          this.profileImage = channelInfo.avatar;
-        }
+      if (response.data && response.data.data && response.data.data.length > 0) {
+        const channelInfo = response.data.data[0]; // Tomar el primer canal
         
         return channelInfo;
       }
       return null;
     } catch (error) {
       console.error('Error al obtener información del canal:', error);
+      console.error('Detalles:', error.response ? error.response.data : 'No hay detalles');
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene información del usuario
+   */
+  async getUserInfo() {
+    if (!this.accessToken) return null;
+
+    try {
+      console.log("Obteniendo información del usuario...");
+      
+      const response = await axios.get(`${this.publicApiBaseUrl}/users`, {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`
+        }
+      });
+
+      console.log("Información del usuario:", response.data);
+
+      if (response.data && response.data.data && response.data.data.length > 0) {
+        const userData = response.data.data[0];
+        
+        // Guardar la URL de la imagen de perfil
+        if (userData.profile_picture) {
+          localStorage.setItem('kick_profile_image', userData.profile_picture);
+          this.profileImage = userData.profile_picture;
+        }
+        
+        // Guardar el nombre de usuario
+        if (userData.name) {
+          localStorage.setItem('kick_username', userData.name);
+        }
+        
+        // Guardar información de usuario
+        localStorage.setItem('kick_user', JSON.stringify(userData));
+        this.user = userData;
+        
+        return userData;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error al obtener información del usuario:', error);
       console.error('Detalles:', error.response ? error.response.data : 'No hay detalles');
       return null;
     }
@@ -244,18 +273,12 @@ class KickAuthService {
       if (response.data && response.data.access_token) {
         this.setSession(response.data);
         
-        // Intentar obtener información del token mediante introspección
-        await this.introspectToken();
-        
-        // Intentar obtener información del canal para la foto de perfil
-        await this.getChannelInfo();
+        // Obtener información del usuario para guardar nombre e imagen de perfil
+        await this.getUserInfo();
         
         // Limpiar variables de estado y code_verifier
         localStorage.removeItem('kick_auth_state');
         localStorage.removeItem('kick_code_verifier');
-        
-        // Guardar el nombre de usuario
-        localStorage.setItem('kick_username', 'fmdavid');
         
         return true;
       }
