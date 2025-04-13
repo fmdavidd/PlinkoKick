@@ -79,11 +79,12 @@ class KickAuthService {
       localStorage.setItem('kick_auth_state', state);
       
       // Construir URL para la autenticación OAuth
+      // En KickAuthService.js, método initiateAuthFlow
       const params = new URLSearchParams({
         client_id: this.clientId,
         redirect_uri: this.redirectUri,
         response_type: 'code',
-        scope: 'user:read chat:write chat:read',  // Scopes correctos
+        scope: 'user:read channel:read chat:write chat:read',  // Añadir channel:read
         state: state,
         code_challenge: codeChallenge,
         code_challenge_method: 'S256'
