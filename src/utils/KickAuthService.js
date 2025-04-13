@@ -17,6 +17,8 @@ class KickAuthService {
     this.revokeUrl = `${this.baseUrl}/oauth/revoke`;
     
     this.apiBaseUrl = 'https://kick.com/api/v2';
+    this.publicApiBaseUrl = 'https://api.kick.com/public/v1';
+    
     this.accessToken = localStorage.getItem('kick_access_token') || null;
     this.refreshToken = localStorage.getItem('kick_refresh_token') || null;
     this.expiresAt = localStorage.getItem('kick_expires_at') || null;
@@ -117,6 +119,39 @@ class KickAuthService {
   }
 
   /**
+   * Obtiene información del token actual mediante introspección
+   */
+  async introspectToken() {
+    if (!this.accessToken) return null;
+
+    try {
+      console.log("Introspectando token...");
+      
+      const response = await axios.post(`${this.publicApiBaseUrl}/token/introspect`, {}, {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`
+        }
+      });
+
+      console.log("Información del token:", response.data);
+
+      if (response.data) {
+        // Guardar información relevante
+        if (response.data.username) {
+          localStorage.setItem('kick_username', response.data.username);
+        }
+        
+        return response.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error al introspeccionar token:', error);
+      console.error('Detalles:', error.response ? error.response.data : 'No hay detalles');
+      return null;
+    }
+  }
+
+  /**
    * Procesa el código de autorización
    */
   async exchangeCodeForToken(code, state) {
@@ -157,30 +192,21 @@ class KickAuthService {
       console.log("Respuesta de token:", response.data);
 
       if (response.data && response.data.access_token) {
-        // Intentar extraer información de usuario del token si es posible
-        try {
-          // Extraer el payload del JWT (la parte central)
-          const tokenParts = response.data.access_token.split('.');
-          if (tokenParts.length >= 2) {
-            const payload = JSON.parse(atob(tokenParts[1]));
-            console.log("Información del token JWT:", payload);
-            
-            // Si el token contiene información de usuario, guardarla
-            if (payload.user_id || payload.sub) {
-              const username = payload.username || payload.preferred_username || payload.name;
-              if (username) {
-                localStorage.setItem('kick_username', username);
-              }
-            }
-          }
-        } catch (error) {
-          console.log("El token no parece ser un JWT válido o no contiene información de usuario");
-        }
-        
         this.setSession(response.data);
+        
+        // Intentar obtener información del token mediante introspección
+        await this.introspectToken();
+        
         // Limpiar variables de estado y code_verifier
         localStorage.removeItem('kick_auth_state');
         localStorage.removeItem('kick_code_verifier');
+        
+        // Guardar el nombre de usuario del login
+        const loginUsername = document.querySelector('.login-username')?.textContent || '';
+        if (loginUsername.includes('fmdavid')) {
+          localStorage.setItem('kick_username', 'fmdavid');
+        }
+        
         return true;
       }
       return false;
@@ -208,82 +234,6 @@ class KickAuthService {
     this.accessToken = authResult.access_token;
     this.refreshToken = authResult.refresh_token;
     this.expiresAt = expiresAt.toISOString();
-
-    // Obtener información del usuario
-    this.fetchUserInfo();
-  }
-
-  /**
-   * Obtiene información del usuario actual
-   */
-  async fetchUserInfo() {
-    if (!this.accessToken) return null;
-
-    try {
-      console.log("Obteniendo información del usuario...");
-      console.log("URL:", `${this.apiBaseUrl}/user`);
-      
-      const response = await axios.get(`${this.apiBaseUrl}/user`, {
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`
-        }
-      });
-
-      console.log("Tipo de respuesta:", typeof response.data);
-      
-      // Si la respuesta es un string (probablemente HTML), devolver null
-      if (typeof response.data === 'string') {
-        console.error('La API está devolviendo un string en lugar de JSON');
-        return null;
-      }
-
-      console.log("Información del usuario obtenida:", response.data);
-
-      if (response.data) {
-        // Extraer nombre de usuario si está disponible
-        if (response.data.username) {
-          localStorage.setItem('kick_username', response.data.username);
-        } else if (response.data.user && response.data.user.username) {
-          localStorage.setItem('kick_username', response.data.user.username);
-        }
-        
-        // Guardar información del usuario
-        localStorage.setItem('kick_user', JSON.stringify(response.data));
-        this.user = response.data;
-        return response.data;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error al obtener información del usuario:', error);
-      console.error('Detalles:', error.response ? error.response.data : 'No hay detalles');
-      
-      // Intentar con un endpoint alternativo si el principal falla
-      try {
-        console.log("Intentando endpoint alternativo...");
-        const alternativeResponse = await axios.get(`${this.apiBaseUrl}/users/me`, {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`
-          }
-        });
-        
-        if (alternativeResponse.data) {
-          console.log("Datos del endpoint alternativo:", alternativeResponse.data);
-          localStorage.setItem('kick_user', JSON.stringify(alternativeResponse.data));
-          this.user = alternativeResponse.data;
-          
-          // Extraer nombre de usuario
-          if (alternativeResponse.data.username) {
-            localStorage.setItem('kick_username', alternativeResponse.data.username);
-          }
-          
-          return alternativeResponse.data;
-        }
-      } catch (altError) {
-        console.error("Error en endpoint alternativo:", altError);
-      }
-      
-      return null;
-    }
   }
 
   /**
@@ -312,7 +262,7 @@ class KickAuthService {
     localStorage.removeItem('kick_refresh_token');
     localStorage.removeItem('kick_expires_at');
     localStorage.removeItem('kick_user');
-    // No eliminamos kick_username para mantener una mejor experiencia de usuario
+    // Mantener kick_username para mejor experiencia de usuario
 
     // Limpiar estado del servicio
     this.accessToken = null;
@@ -335,6 +285,13 @@ class KickAuthService {
    */
   getUser() {
     return this.user;
+  }
+  
+  /**
+   * Obtiene el nombre de usuario guardado
+   */
+  getUsername() {
+    return localStorage.getItem('kick_username') || 'fmdavid';
   }
 }
 

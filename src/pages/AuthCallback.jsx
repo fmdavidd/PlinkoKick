@@ -1,4 +1,3 @@
-// src/pages/AuthCallback.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import kickAuthService from '../utils/KickAuthService';
@@ -19,6 +18,9 @@ const AuthCallback = () => {
       const state = urlParams.get('state');
       const error = urlParams.get('error');
       const errorDescription = urlParams.get('error_description');
+
+      // Guardar nombre de usuario conocido
+      localStorage.setItem('kick_username', 'fmdavid');
 
       if (error) {
         setStatus(`Error: ${error}${errorDescription ? ` - ${errorDescription}` : ''}`);

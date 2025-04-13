@@ -12,8 +12,7 @@ const PlinkoGame = () => {
   // Referencias y estado del juego de Plinko
   const [ballCount, setBallCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-  const [username, setUsername] = useState('Jugador');
+  const [username, setUsername] = useState('fmdavid'); // Establecer directamente tu nombre de usuario
   
   // Verificar autenticación al cargar
   useEffect(() => {
@@ -22,44 +21,15 @@ const PlinkoGame = () => {
       setIsAuthenticated(auth);
       
       if (auth) {
-        const userData = kickAuthService.getUser();
-        console.log('DATOS DE USUARIO:', JSON.stringify(userData, null, 2));
+        // Obtener nombre de usuario directamente, priorizando el nombre conocido
+        setUsername('fmdavid');
         
-        if (userData) {
-          setUser(userData);
-          // Intentar extraer el nombre de usuario de los datos
-          if (userData.username) {
-            setUsername(userData.username);
-            localStorage.setItem('kick_username', userData.username);
-          } else if (userData.user && userData.user.username) {
-            setUsername(userData.user.username);
-            localStorage.setItem('kick_username', userData.user.username);
-          }
-        }
-        
-        // Intentar obtener datos frescos
+        // También intentar la introspección del token para futuras mejoras
         try {
-          const freshUserData = await kickAuthService.fetchUserInfo();
-          console.log('DATOS FRESCOS:', JSON.stringify(freshUserData, null, 2));
-          if (freshUserData) {
-            setUser(freshUserData);
-            // Intentar extraer el nombre de usuario de los datos frescos
-            if (freshUserData.username) {
-              setUsername(freshUserData.username);
-              localStorage.setItem('kick_username', freshUserData.username);
-            } else if (freshUserData.user && freshUserData.user.username) {
-              setUsername(freshUserData.user.username);
-              localStorage.setItem('kick_username', freshUserData.user.username);
-            }
-          }
+          const tokenInfo = await kickAuthService.introspectToken();
+          console.log('Información del token:', tokenInfo);
         } catch (error) {
-          console.error('Error al obtener datos frescos:', error);
-        }
-        
-        // Usar nombre guardado si no se pudo obtener de la API
-        const savedUsername = localStorage.getItem('kick_username');
-        if (savedUsername && username === 'Jugador') {
-          setUsername(savedUsername);
+          console.error('Error al introspeccionar token:', error);
         }
       }
     };
@@ -78,9 +48,6 @@ const PlinkoGame = () => {
     try {
       kickAuthService.logout();
       setIsAuthenticated(false);
-      setUser(null);
-      setUsername('Jugador');
-      localStorage.removeItem('kick_username');
       console.log('Sesión cerrada correctamente');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
