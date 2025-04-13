@@ -105,7 +105,17 @@ class KickAuthService {
       return false;
     }
   }
-
+  async tryAppAccessToken() {
+    try {
+      // Use the existing getAppAccessToken method
+      const token = await this.getAppAccessToken();
+      console.log("App token obtained:", token ? "Success" : "Failed");
+      return token;
+    } catch (error) {
+      console.error("Error getting app token:", error);
+      return null;
+    }
+  }
   /**
    * Verifica si el usuario está autenticado
    */
