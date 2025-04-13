@@ -157,6 +157,26 @@ class KickAuthService {
       console.log("Respuesta de token:", response.data);
 
       if (response.data && response.data.access_token) {
+        // Intentar extraer información de usuario del token si es posible
+        try {
+          // Extraer el payload del JWT (la parte central)
+          const tokenParts = response.data.access_token.split('.');
+          if (tokenParts.length >= 2) {
+            const payload = JSON.parse(atob(tokenParts[1]));
+            console.log("Información del token JWT:", payload);
+            
+            // Si el token contiene información de usuario, guardarla
+            if (payload.user_id || payload.sub) {
+              const username = payload.username || payload.preferred_username || payload.name;
+              if (username) {
+                localStorage.setItem('kick_username', username);
+              }
+            }
+          }
+        } catch (error) {
+          console.log("El token no parece ser un JWT válido o no contiene información de usuario");
+        }
+        
         this.setSession(response.data);
         // Limpiar variables de estado y code_verifier
         localStorage.removeItem('kick_auth_state');
@@ -194,64 +214,6 @@ class KickAuthService {
   }
 
   /**
-   * Refresca el token de acceso
-   */
-  async refreshAccessToken() {
-    if (!this.refreshToken) return false;
-
-    try {
-      // Crear FormData para enviar como application/x-www-form-urlencoded
-      const formData = new URLSearchParams();
-      formData.append('grant_type', 'refresh_token');
-      formData.append('client_id', this.clientId);
-      formData.append('client_secret', this.clientSecret);
-      formData.append('refresh_token', this.refreshToken);
-      
-      const response = await axios.post(this.tokenUrl, formData.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-
-      if (response.data && response.data.access_token) {
-        this.setSession(response.data);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Error al refrescar token:', error);
-      this.logout();
-      return false;
-    }
-  }
-
-  /**
-   * Revoca el token de acceso actual
-   */
-  async revokeToken() {
-    if (!this.accessToken) return true;
-    
-    try {
-      console.log("Intentando revocar token:", this.accessToken);
-      
-      await axios.post(`${this.revokeUrl}?token=${this.accessToken}&token_hint_type=access_token`, {}, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-      
-      console.log("Token revocado exitosamente");
-      this.logout();
-      return true;
-    } catch (error) {
-      console.error('Error al revocar token:', error);
-      // Aún así, limpiamos la sesión local
-      this.logout();
-      return false;
-    }
-  }
-
-  /**
    * Obtiene información del usuario actual
    */
   async fetchUserInfo() {
@@ -260,7 +222,6 @@ class KickAuthService {
     try {
       console.log("Obteniendo información del usuario...");
       console.log("URL:", `${this.apiBaseUrl}/user`);
-      console.log("Token:", this.accessToken);
       
       const response = await axios.get(`${this.apiBaseUrl}/user`, {
         headers: {
@@ -268,9 +229,24 @@ class KickAuthService {
         }
       });
 
+      console.log("Tipo de respuesta:", typeof response.data);
+      
+      // Si la respuesta es un string (probablemente HTML), devolver null
+      if (typeof response.data === 'string') {
+        console.error('La API está devolviendo un string en lugar de JSON');
+        return null;
+      }
+
       console.log("Información del usuario obtenida:", response.data);
 
       if (response.data) {
+        // Extraer nombre de usuario si está disponible
+        if (response.data.username) {
+          localStorage.setItem('kick_username', response.data.username);
+        } else if (response.data.user && response.data.user.username) {
+          localStorage.setItem('kick_username', response.data.user.username);
+        }
+        
         // Guardar información del usuario
         localStorage.setItem('kick_user', JSON.stringify(response.data));
         this.user = response.data;
@@ -280,6 +256,32 @@ class KickAuthService {
     } catch (error) {
       console.error('Error al obtener información del usuario:', error);
       console.error('Detalles:', error.response ? error.response.data : 'No hay detalles');
+      
+      // Intentar con un endpoint alternativo si el principal falla
+      try {
+        console.log("Intentando endpoint alternativo...");
+        const alternativeResponse = await axios.get(`${this.apiBaseUrl}/users/me`, {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`
+          }
+        });
+        
+        if (alternativeResponse.data) {
+          console.log("Datos del endpoint alternativo:", alternativeResponse.data);
+          localStorage.setItem('kick_user', JSON.stringify(alternativeResponse.data));
+          this.user = alternativeResponse.data;
+          
+          // Extraer nombre de usuario
+          if (alternativeResponse.data.username) {
+            localStorage.setItem('kick_username', alternativeResponse.data.username);
+          }
+          
+          return alternativeResponse.data;
+        }
+      } catch (altError) {
+        console.error("Error en endpoint alternativo:", altError);
+      }
+      
       return null;
     }
   }
@@ -290,11 +292,27 @@ class KickAuthService {
   logout() {
     console.log("Cerrando sesión y limpiando datos locales");
     
+    // Intentar revocar el token si está disponible
+    if (this.accessToken) {
+      try {
+        axios.post(`${this.revokeUrl}?token=${this.accessToken}&token_hint_type=access_token`, {}, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        }).catch(error => {
+          console.log("Error al revocar token, continuando con el cierre de sesión local:", error);
+        });
+      } catch (error) {
+        console.error("Error al revocar token:", error);
+      }
+    }
+    
     // Limpiar localStorage
     localStorage.removeItem('kick_access_token');
     localStorage.removeItem('kick_refresh_token');
     localStorage.removeItem('kick_expires_at');
     localStorage.removeItem('kick_user');
+    // No eliminamos kick_username para mantener una mejor experiencia de usuario
 
     // Limpiar estado del servicio
     this.accessToken = null;

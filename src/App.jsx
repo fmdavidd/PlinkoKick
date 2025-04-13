@@ -13,6 +13,7 @@ const PlinkoGame = () => {
   const [ballCount, setBallCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
+  const [username, setUsername] = useState('Jugador');
   
   // Verificar autenticación al cargar
   useEffect(() => {
@@ -22,18 +23,43 @@ const PlinkoGame = () => {
       
       if (auth) {
         const userData = kickAuthService.getUser();
-        console.log('Datos del usuario:', userData); // Para depuración
-        setUser(userData);
+        console.log('DATOS DE USUARIO:', JSON.stringify(userData, null, 2));
         
-        // Si no hay datos de usuario, intentar obtenerlos
-        if (!userData) {
-          try {
-            const freshUserData = await kickAuthService.fetchUserInfo();
-            console.log('Nuevos datos de usuario:', freshUserData);
-            setUser(freshUserData);
-          } catch (error) {
-            console.error('Error al obtener datos del usuario:', error);
+        if (userData) {
+          setUser(userData);
+          // Intentar extraer el nombre de usuario de los datos
+          if (userData.username) {
+            setUsername(userData.username);
+            localStorage.setItem('kick_username', userData.username);
+          } else if (userData.user && userData.user.username) {
+            setUsername(userData.user.username);
+            localStorage.setItem('kick_username', userData.user.username);
           }
+        }
+        
+        // Intentar obtener datos frescos
+        try {
+          const freshUserData = await kickAuthService.fetchUserInfo();
+          console.log('DATOS FRESCOS:', JSON.stringify(freshUserData, null, 2));
+          if (freshUserData) {
+            setUser(freshUserData);
+            // Intentar extraer el nombre de usuario de los datos frescos
+            if (freshUserData.username) {
+              setUsername(freshUserData.username);
+              localStorage.setItem('kick_username', freshUserData.username);
+            } else if (freshUserData.user && freshUserData.user.username) {
+              setUsername(freshUserData.user.username);
+              localStorage.setItem('kick_username', freshUserData.user.username);
+            }
+          }
+        } catch (error) {
+          console.error('Error al obtener datos frescos:', error);
+        }
+        
+        // Usar nombre guardado si no se pudo obtener de la API
+        const savedUsername = localStorage.getItem('kick_username');
+        if (savedUsername && username === 'Jugador') {
+          setUsername(savedUsername);
         }
       }
     };
@@ -46,19 +72,24 @@ const PlinkoGame = () => {
     onBallChange: () => setBallCount(prev => prev + 1)
   });
 
-  // Cerrar sesión (simplificado)
+  // Cerrar sesión
   const handleLogout = () => {
     console.log('Cerrando sesión...');
     try {
-      // Primero intentamos revocar el token
       kickAuthService.logout();
-      // Luego actualizamos el estado local
       setIsAuthenticated(false);
       setUser(null);
+      setUsername('Jugador');
+      localStorage.removeItem('kick_username');
       console.log('Sesión cerrada correctamente');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
+  };
+
+  // Obtener la primera letra del nombre de usuario para el avatar
+  const getInitial = () => {
+    return username.charAt(0).toUpperCase();
   };
 
   return (
@@ -68,33 +99,13 @@ const PlinkoGame = () => {
         <div className="auth-container">
           {isAuthenticated ? (
             <div className="user-info">
-              {user && (
-                <>
-                  <span>¡Hola, {user.username || 'usuario'}!</span>
-                  {/* Prueba con diferentes propiedades de imagen posibles */}
-                  <img 
-                    src={user.avatar_url || user.profile_image || user.profile_picture || 'https://via.placeholder.com/40'} 
-                    alt="Avatar" 
-                    className="user-avatar" 
-                    onError={(e) => {
-                      console.log('Error al cargar la imagen de perfil');
-                      e.target.src = 'https://via.placeholder.com/40';
-                    }}
-                  />
-                </>
-              )}
+              <span>¡Hola, {username}!</span>
+              <div className="avatar-circle">
+                {getInitial()}
+              </div>
               <button 
                 className="logout-button" 
                 onClick={handleLogout}
-                style={{
-                  backgroundColor: '#333',
-                  color: 'white',
-                  padding: '8px 12px',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  marginLeft: '10px'
-                }}
               >
                 Cerrar sesión
               </button>
