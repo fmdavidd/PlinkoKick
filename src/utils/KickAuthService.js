@@ -8,7 +8,9 @@ class KickAuthService {
   constructor() {
     this.clientId = import.meta.env.VITE_KICK_CLIENT_ID || '';
     this.clientSecret = import.meta.env.VITE_KICK_CLIENT_SECRET || '';
-    this.redirectUri = import.meta.env.VITE_KICK_REDIRECT_URI || 'https://plinko-kick.vercel.app/auth/callback';
+    
+    // Use a local redirect URI for handling the callback
+    this.redirectUri = 'http://localhost:8080';
     
     // Siguiendo exactamente la documentación 
     this.baseUrl = 'https://id.kick.com';
@@ -22,6 +24,9 @@ class KickAuthService {
     this.expiresAt = localStorage.getItem('kick_expires_at') || null;
     this.user = JSON.parse(localStorage.getItem('kick_user') || 'null');
     this.codeVerifier = localStorage.getItem('kick_code_verifier') || null;
+    
+    // Store for callback server
+    this.callbackServer = null;
   }
 
   /**
@@ -63,14 +68,82 @@ class KickAuthService {
   }
 
   /**
+   * Configura un servidor local para manejar la redirección OAuth
+   * @returns {Promise<string>} - Promesa que se resuelve con el código de autorización
+   */
+  setupCallbackServer() {
+    return new Promise((resolve, reject) => {
+      // Implementación simplificada de un servidor HTTP local
+      // Nota: Esto solo funcionará en un entorno de desarrollo
+      
+      if (!window.location.protocol.includes('http')) {
+        reject(new Error('El protocolo debe ser HTTP para usar el servidor local'));
+        return;
+      }
+      
+      // Crear un iframe oculto para actuar como nuestro "servidor"
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+      
+      // Escuchar mensajes del iframe (simulando nuestro servidor)
+      const messageHandler = (event) => {
+        // Solo procesar mensajes de nuestro origen
+        if (event.origin !== window.location.origin) return;
+        
+        try {
+          const data = event.data;
+          if (data && data.type === 'kick_auth_callback' && data.code) {
+            // Código recibido, limpiar y resolver
+            window.removeEventListener('message', messageHandler);
+            document.body.removeChild(iframe);
+            resolve(data.code);
+          }
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      window.addEventListener('message', messageHandler);
+      
+      // Simular el servidor en el iframe
+      iframe.srcdoc = `
+        <html>
+          <body>
+            <script>
+              // Escuchar cambios en la URL (redirecciones)
+              function checkUrl() {
+                const url = window.location.href;
+                if (url.includes('code=')) {
+                  // Extraer el código de la URL
+                  const code = new URLSearchParams(window.location.search).get('code');
+                  if (code) {
+                    // Enviar mensaje al padre
+                    window.parent.postMessage({ type: 'kick_auth_callback', code: code }, window.location.origin);
+                    document.body.innerHTML = '<h1>Autenticación exitosa. Puedes cerrar esta ventana.</h1>';
+                  }
+                }
+              }
+              
+              // Verificar constantemente la URL
+              setInterval(checkUrl, 100);
+              document.body.innerHTML = '<h1>Esperando redirección de OAuth...</h1>';
+            </script>
+          </body>
+        </html>
+      `;
+      
+      // Almacenar referencia al iframe
+      this.callbackServer = iframe;
+    });
+  }
+
+  /**
    * Inicia el flujo de autenticación de Kick
    */
   async initiateAuthFlow() {
     try {
       console.log("Iniciando flujo de autenticación con Kick");
-      console.log("Client ID:", this.clientId);
-      console.log("Redirect URI:", this.redirectUri);
-      console.log("Auth URL:", this.authUrl);
       
       // Generar code_verifier y guardarlo
       const codeVerifier = this.generateRandomString(128);
@@ -84,6 +157,9 @@ class KickAuthService {
       const state = this.generateRandomString(32);
       localStorage.setItem('kick_auth_state', state);
       
+      // Configurar servidor local para manejar callback
+      const codePromise = this.setupCallbackServer();
+      
       // Construir URL para la autenticación OAuth
       const params = new URLSearchParams({
         client_id: this.clientId,
@@ -96,44 +172,31 @@ class KickAuthService {
       });
       
       const fullUrl = `${this.authUrl}?${params.toString()}`;
-      console.log("Redirigiendo a:", fullUrl);
+      console.log("URL de autorización:", fullUrl);
       
-      // Redirigir al usuario a la página de autorización de Kick
-      window.location.href = fullUrl;
+      // Abrir una nueva ventana para la autorización
+      const authWindow = window.open(fullUrl, 'KickAuth', 'width=600,height=700');
+      
+      if (!authWindow) {
+        throw new Error('El navegador bloqueó la ventana emergente. Por favor, permite ventanas emergentes para este sitio.');
+      }
+      
+      // Esperar a que se complete la autorización
+      try {
+        const code = await codePromise;
+        console.log("Código de autorización recibido:", code);
+        
+        // Intercambiar código por token
+        const success = await this.exchangeCodeForToken(code, state);
+        return success;
+      } catch (error) {
+        console.error("Error en el proceso de autorización:", error);
+        return false;
+      }
     } catch (error) {
       console.error('Error al iniciar el flujo de autenticación:', error);
       return false;
     }
-  }
-  async tryAppAccessToken() {
-    try {
-      // Use the existing getAppAccessToken method
-      const token = await this.getAppAccessToken();
-      console.log("App token obtained:", token ? "Success" : "Failed");
-      return token;
-    } catch (error) {
-      console.error("Error getting app token:", error);
-      return null;
-    }
-  }
-  /**
-   * Verifica si el usuario está autenticado
-   */
-  isAuthenticated() {
-    if (!this.accessToken) return false;
-    
-    // Comprobar si el token ha expirado
-    if (this.expiresAt) {
-      const now = new Date().getTime();
-      const expiresTime = new Date(this.expiresAt).getTime();
-      if (now >= expiresTime) {
-        // Token expirado, intentar refrescar
-        this.refreshAccessToken();
-        return false;
-      }
-    }
-    
-    return true;
   }
 
   /**
@@ -201,8 +264,32 @@ class KickAuthService {
   }
 
   /**
+   * Configura la sesión con la información de autenticación
+   * @private
+   */
+  setSession(authResult) {
+    // Calcular tiempo de expiración
+    const expiresAt = new Date();
+    expiresAt.setSeconds(expiresAt.getSeconds() + authResult.expires_in);
+
+    // Guardar datos en localStorage
+    localStorage.setItem('kick_access_token', authResult.access_token);
+    localStorage.setItem('kick_refresh_token', authResult.refresh_token);
+    localStorage.setItem('kick_expires_at', expiresAt.toISOString());
+
+    // Actualizar el estado del servicio
+    this.accessToken = authResult.access_token;
+    this.refreshToken = authResult.refresh_token;
+    this.expiresAt = expiresAt.toISOString();
+
+    // Obtener información del usuario
+    this.fetchUserInfo();
+  }
+
+  // Resto de métodos igual que antes (isAuthenticated, refreshAccessToken, etc.)
+  
+  /**
    * Intenta obtener un token de aplicación (App Access Token)
-   * Este método puede ser más simple si no necesitas autenticación de usuario
    */
   async getAppAccessToken() {
     try {
@@ -240,6 +327,26 @@ class KickAuthService {
   }
 
   /**
+   * Verifica si el usuario está autenticado
+   */
+  isAuthenticated() {
+    if (!this.accessToken) return false;
+    
+    // Comprobar si el token ha expirado
+    if (this.expiresAt) {
+      const now = new Date().getTime();
+      const expiresTime = new Date(this.expiresAt).getTime();
+      if (now >= expiresTime) {
+        // Token expirado, intentar refrescar
+        this.refreshAccessToken();
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  /**
    * Refresca el token de acceso
    */
   async refreshAccessToken() {
@@ -269,52 +376,6 @@ class KickAuthService {
       this.logout();
       return false;
     }
-  }
-
-  /**
-   * Revoca el token de acceso actual
-   */
-  async revokeToken() {
-    if (!this.accessToken) return true;
-    
-    try {
-      await axios.post(`${this.revokeUrl}?token=${this.accessToken}&token_hint_type=access_token`, {}, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      });
-      
-      this.logout();
-      return true;
-    } catch (error) {
-      console.error('Error al revocar token:', error);
-      // Aún así, limpiamos la sesión local
-      this.logout();
-      return false;
-    }
-  }
-
-  /**
-   * Configura la sesión con la información de autenticación
-   * @private
-   */
-  setSession(authResult) {
-    // Calcular tiempo de expiración
-    const expiresAt = new Date();
-    expiresAt.setSeconds(expiresAt.getSeconds() + authResult.expires_in);
-
-    // Guardar datos en localStorage
-    localStorage.setItem('kick_access_token', authResult.access_token);
-    localStorage.setItem('kick_refresh_token', authResult.refresh_token);
-    localStorage.setItem('kick_expires_at', expiresAt.toISOString());
-
-    // Actualizar el estado del servicio
-    this.accessToken = authResult.access_token;
-    this.refreshToken = authResult.refresh_token;
-    this.expiresAt = expiresAt.toISOString();
-
-    // Obtener información del usuario
-    this.fetchUserInfo();
   }
 
   /**
@@ -361,17 +422,17 @@ class KickAuthService {
   }
 
   /**
-   * Obtiene el token de acceso
+   * Test function to try getting an app access token directly
    */
-  getAccessToken() {
-    return this.accessToken;
-  }
-
-  /**
-   * Obtiene la información del usuario autenticado
-   */
-  getUser() {
-    return this.user;
+  async tryAppAccessToken() {
+    try {
+      const token = await this.getAppAccessToken();
+      console.log("App token obtained:", token ? "Success" : "Failed");
+      return token;
+    } catch (error) {
+      console.error("Error getting app token:", error);
+      return null;
+    }
   }
 }
 
