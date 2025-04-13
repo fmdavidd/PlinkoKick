@@ -12,7 +12,8 @@ const PlinkoGame = () => {
   // Referencias y estado del juego de Plinko
   const [ballCount, setBallCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [username, setUsername] = useState('fmdavid'); // Establecer directamente tu nombre de usuario
+  const [username, setUsername] = useState('fmdavid');
+  const [profileImage, setProfileImage] = useState(null);
   
   // Verificar autenticación al cargar
   useEffect(() => {
@@ -21,15 +22,25 @@ const PlinkoGame = () => {
       setIsAuthenticated(auth);
       
       if (auth) {
-        // Obtener nombre de usuario directamente, priorizando el nombre conocido
+        // Establecer nombre de usuario y obtener imagen de perfil si está disponible
         setUsername('fmdavid');
+        const savedProfileImage = kickAuthService.getProfileImage();
+        if (savedProfileImage) {
+          setProfileImage(savedProfileImage);
+        }
         
-        // También intentar la introspección del token para futuras mejoras
+        // También intentar obtener información del canal para la foto de perfil
         try {
-          const tokenInfo = await kickAuthService.introspectToken();
-          console.log('Información del token:', tokenInfo);
+          const channelInfo = await kickAuthService.getChannelInfo();
+          console.log('Información del canal:', channelInfo);
+          
+          // Actualizar la imagen de perfil si se obtuvo
+          const newProfileImage = kickAuthService.getProfileImage();
+          if (newProfileImage) {
+            setProfileImage(newProfileImage);
+          }
         } catch (error) {
-          console.error('Error al introspeccionar token:', error);
+          console.error('Error al obtener información del canal:', error);
         }
       }
     };
@@ -48,6 +59,7 @@ const PlinkoGame = () => {
     try {
       kickAuthService.logout();
       setIsAuthenticated(false);
+      setProfileImage(null);
       console.log('Sesión cerrada correctamente');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
@@ -67,9 +79,26 @@ const PlinkoGame = () => {
           {isAuthenticated ? (
             <div className="user-info">
               <span>¡Hola, {username}!</span>
-              <div className="avatar-circle">
-                {getInitial()}
-              </div>
+              {profileImage ? (
+                <img 
+                  src={profileImage} 
+                  alt="Perfil" 
+                  className="profile-image"
+                  onError={(e) => {
+                    console.error('Error al cargar la imagen de perfil');
+                    e.target.style.display = 'none';
+                    // Mostrar el círculo con la inicial si hay error
+                    const avatarCircle = document.createElement('div');
+                    avatarCircle.className = 'avatar-circle';
+                    avatarCircle.textContent = getInitial();
+                    e.target.parentNode.insertBefore(avatarCircle, e.target);
+                  }}
+                />
+              ) : (
+                <div className="avatar-circle">
+                  {getInitial()}
+                </div>
+              )}
               <button 
                 className="logout-button" 
                 onClick={handleLogout}

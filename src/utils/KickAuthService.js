@@ -24,6 +24,9 @@ class KickAuthService {
     this.expiresAt = localStorage.getItem('kick_expires_at') || null;
     this.user = JSON.parse(localStorage.getItem('kick_user') || 'null');
     this.codeVerifier = localStorage.getItem('kick_code_verifier') || null;
+    
+    // Información de perfil
+    this.profileImage = localStorage.getItem('kick_profile_image') || null;
   }
 
   /**
@@ -80,7 +83,7 @@ class KickAuthService {
         client_id: this.clientId,
         redirect_uri: this.redirectUri,
         response_type: 'code',
-        scope: 'user:read chat:write chat:read',  // Scopes corregidos
+        scope: 'user:read chat:write chat:read',  // Scopes correctos
         state: state,
         code_challenge: codeChallenge,
         code_challenge_method: 'S256'
@@ -152,6 +155,52 @@ class KickAuthService {
   }
 
   /**
+   * Obtiene información del canal del usuario
+   */
+  async getChannelInfo() {
+    if (!this.accessToken) return null;
+
+    try {
+      console.log("Obteniendo información del canal...");
+      
+      // Llamar al endpoint de canales sin parámetros para obtener el canal del usuario autenticado
+      const response = await axios.get(`${this.publicApiBaseUrl}/channels`, {
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`
+        }
+      });
+
+      console.log("Información del canal:", response.data);
+
+      if (response.data && response.data.length > 0) {
+        const channelInfo = response.data[0]; // Tomar el primer canal
+        
+        // Buscar la imagen de perfil en la respuesta
+        if (channelInfo.user && channelInfo.user.profile_pic) {
+          localStorage.setItem('kick_profile_image', channelInfo.user.profile_pic);
+          this.profileImage = channelInfo.user.profile_pic;
+        } else if (channelInfo.profile_pic) {
+          localStorage.setItem('kick_profile_image', channelInfo.profile_pic);
+          this.profileImage = channelInfo.profile_pic;
+        } else if (channelInfo.thumbnail && channelInfo.thumbnail.url) {
+          localStorage.setItem('kick_profile_image', channelInfo.thumbnail.url);
+          this.profileImage = channelInfo.thumbnail.url;
+        } else if (channelInfo.avatar) {
+          localStorage.setItem('kick_profile_image', channelInfo.avatar);
+          this.profileImage = channelInfo.avatar;
+        }
+        
+        return channelInfo;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error al obtener información del canal:', error);
+      console.error('Detalles:', error.response ? error.response.data : 'No hay detalles');
+      return null;
+    }
+  }
+
+  /**
    * Procesa el código de autorización
    */
   async exchangeCodeForToken(code, state) {
@@ -197,15 +246,15 @@ class KickAuthService {
         // Intentar obtener información del token mediante introspección
         await this.introspectToken();
         
+        // Intentar obtener información del canal para la foto de perfil
+        await this.getChannelInfo();
+        
         // Limpiar variables de estado y code_verifier
         localStorage.removeItem('kick_auth_state');
         localStorage.removeItem('kick_code_verifier');
         
-        // Guardar el nombre de usuario del login
-        const loginUsername = document.querySelector('.login-username')?.textContent || '';
-        if (loginUsername.includes('fmdavid')) {
-          localStorage.setItem('kick_username', 'fmdavid');
-        }
+        // Guardar el nombre de usuario
+        localStorage.setItem('kick_username', 'fmdavid');
         
         return true;
       }
@@ -262,6 +311,7 @@ class KickAuthService {
     localStorage.removeItem('kick_refresh_token');
     localStorage.removeItem('kick_expires_at');
     localStorage.removeItem('kick_user');
+    localStorage.removeItem('kick_profile_image');
     // Mantener kick_username para mejor experiencia de usuario
 
     // Limpiar estado del servicio
@@ -269,6 +319,7 @@ class KickAuthService {
     this.refreshToken = null;
     this.expiresAt = null;
     this.user = null;
+    this.profileImage = null;
     
     console.log("Sesión cerrada correctamente");
   }
@@ -292,6 +343,13 @@ class KickAuthService {
    */
   getUsername() {
     return localStorage.getItem('kick_username') || 'fmdavid';
+  }
+  
+  /**
+   * Obtiene la URL de la imagen de perfil
+   */
+  getProfileImage() {
+    return localStorage.getItem('kick_profile_image');
   }
 }
 
