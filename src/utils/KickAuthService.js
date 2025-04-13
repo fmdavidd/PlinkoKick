@@ -6,10 +6,16 @@ import axios from 'axios';
  */
 class KickAuthService {
   constructor() {
-    this.clientId = process.env.REACT_APP_KICK_CLIENT_ID || '';
-    this.clientSecret = process.env.REACT_APP_KICK_CLIENT_SECRET || '';
-    this.redirectUri = process.env.REACT_APP_KICK_REDIRECT_URI || 'http://localhost:3000/auth/callback';
-    this.baseUrl = 'https://id.kick.com/oauth';
+    this.clientId = import.meta.env.VITE_KICK_CLIENT_ID || '';
+    this.clientSecret = import.meta.env.VITE_KICK_CLIENT_SECRET || '';
+    this.redirectUri = import.meta.env.VITE_KICK_REDIRECT_URI || 'http://localhost:5173/auth/callback';
+    
+    // Siguiendo exactamente la documentación 
+    this.baseUrl = 'https://id.kick.com';
+    this.authUrl = `${this.baseUrl}/oauth/authorize`;
+    this.tokenUrl = `${this.baseUrl}/oauth/token`;
+    this.revokeUrl = `${this.baseUrl}/oauth/revoke`;
+    
     this.apiBaseUrl = 'https://kick.com/api/v2';
     this.accessToken = localStorage.getItem('kick_access_token') || null;
     this.refreshToken = localStorage.getItem('kick_refresh_token') || null;
@@ -61,6 +67,11 @@ class KickAuthService {
    */
   async initiateAuthFlow() {
     try {
+      console.log("Iniciando flujo de autenticación con Kick");
+      console.log("Client ID:", this.clientId);
+      console.log("Redirect URI:", this.redirectUri);
+      console.log("Auth URL:", this.authUrl);
+      
       // Generar code_verifier y guardarlo
       const codeVerifier = this.generateRandomString(128);
       localStorage.setItem('kick_code_verifier', codeVerifier);
@@ -74,7 +85,6 @@ class KickAuthService {
       localStorage.setItem('kick_auth_state', state);
       
       // Construir URL para la autenticación OAuth
-      const authUrl = `${this.baseUrl}/authorize`;
       const params = new URLSearchParams({
         client_id: this.clientId,
         redirect_uri: this.redirectUri,
@@ -85,8 +95,11 @@ class KickAuthService {
         code_challenge_method: 'S256'
       });
       
+      const fullUrl = `${this.authUrl}?${params.toString()}`;
+      console.log("Redirigiendo a:", fullUrl);
+      
       // Redirigir al usuario a la página de autorización de Kick
-      window.location.href = `${authUrl}?${params.toString()}`;
+      window.location.href = fullUrl;
     } catch (error) {
       console.error('Error al iniciar el flujo de autenticación:', error);
       return false;
@@ -134,6 +147,8 @@ class KickAuthService {
     }
     
     try {
+      console.log("Intercambiando código por token...");
+      
       // Crear FormData para enviar como application/x-www-form-urlencoded
       const formData = new URLSearchParams();
       formData.append('grant_type', 'authorization_code');
@@ -143,11 +158,22 @@ class KickAuthService {
       formData.append('code', code);
       formData.append('code_verifier', codeVerifier);
       
-      const response = await axios.post(`${this.baseUrl}/token`, formData.toString(), {
+      console.log("URL de token:", this.tokenUrl);
+      console.log("Datos de solicitud:", {
+        grant_type: 'authorization_code',
+        client_id: this.clientId,
+        redirect_uri: this.redirectUri,
+        code: code,
+        code_verifier: codeVerifier
+      });
+      
+      const response = await axios.post(this.tokenUrl, formData.toString(), {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         }
       });
+
+      console.log("Respuesta de token:", response.data);
 
       if (response.data && response.data.access_token) {
         this.setSession(response.data);
@@ -159,7 +185,47 @@ class KickAuthService {
       return false;
     } catch (error) {
       console.error('Error al intercambiar código por token:', error);
+      console.error('Detalles:', error.response ? error.response.data : 'No hay detalles');
       return false;
+    }
+  }
+
+  /**
+   * Intenta obtener un token de aplicación (App Access Token)
+   * Este método puede ser más simple si no necesitas autenticación de usuario
+   */
+  async getAppAccessToken() {
+    try {
+      console.log("Obteniendo token de aplicación...");
+      
+      // Crear FormData para enviar como application/x-www-form-urlencoded
+      const formData = new URLSearchParams();
+      formData.append('grant_type', 'client_credentials');
+      formData.append('client_id', this.clientId);
+      formData.append('client_secret', this.clientSecret);
+      
+      const response = await axios.post(this.tokenUrl, formData.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+
+      console.log("Respuesta de token de aplicación:", response.data);
+
+      if (response.data && response.data.access_token) {
+        // Guardar token pero no como sesión de usuario
+        localStorage.setItem('kick_app_token', response.data.access_token);
+        const expiresAt = new Date();
+        expiresAt.setSeconds(expiresAt.getSeconds() + response.data.expires_in);
+        localStorage.setItem('kick_app_token_expires', expiresAt.toISOString());
+        
+        return response.data.access_token;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error al obtener token de aplicación:', error);
+      console.error('Detalles:', error.response ? error.response.data : 'No hay detalles');
+      return null;
     }
   }
 
@@ -177,7 +243,7 @@ class KickAuthService {
       formData.append('client_secret', this.clientSecret);
       formData.append('refresh_token', this.refreshToken);
       
-      const response = await axios.post(`${this.baseUrl}/token`, formData.toString(), {
+      const response = await axios.post(this.tokenUrl, formData.toString(), {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         }
@@ -202,7 +268,7 @@ class KickAuthService {
     if (!this.accessToken) return true;
     
     try {
-      await axios.post(`${this.baseUrl}/revoke?token=${this.accessToken}&token_hint_type=access_token`, {}, {
+      await axios.post(`${this.revokeUrl}?token=${this.accessToken}&token_hint_type=access_token`, {}, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         }
